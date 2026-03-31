@@ -114,15 +114,12 @@
             "init_pos": [0.95, -0.3, 0.755],
             "init_rot": [0.3, 0, 180],
             "attrs": {
-                "enable_ccd": true,
-                "min_position_iters": 32,
-                "min_velocity_iters": 8,
                 "static_friction": 1.0,
                 "dynamic_friction": 1.0
             },
             "drive_pros": {
-                "stiffness" : 10,
-                "damping" : 1.0
+                "stiffness" : 0,
+                "damping" : 0
             }
         }
     ]
