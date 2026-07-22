@@ -115,11 +115,14 @@ class OpenDrawerEnv(EmbodiedEnv):
             ),
         )
         right_target_states = [
-            PlanState(move_type=MoveType.JOINT_MOVE, qpos=qpos_start[0])
+            PlanState.single(move_type=MoveType.JOINT_MOVE, qpos=qpos_start[0])
         ]
         plan_result_to_start = self.motion_gen.generate(
             target_states=right_target_states, options=options_to_start
         )
+        # PlanResult.positions is env-batched (B, N, DOF); drop the batch dim
+        # (B=1) to recover the per-env trajectory (N, DOF) used below.
+        plan_to_start = plan_result_to_start.positions[0]
 
         # Generate cartesian space waypoints
         # You may use get_link_pose from articulation with specified link name,
@@ -142,12 +145,13 @@ class OpenDrawerEnv(EmbodiedEnv):
             ),
         )
         to_handle_target_states = [
-            PlanState(move_type=MoveType.EEF_MOVE, xpos=xpos)
+            PlanState.single(move_type=MoveType.EEF_MOVE, xpos=xpos)
             for xpos in [xpos_begin, xpos_mid]
         ]
         plan_result_to_handle = self.motion_gen.generate(
             target_states=to_handle_target_states, options=options_to_handle
         )
+        plan_to_handle = plan_result_to_handle.positions[0]
 
         # Phase 4: Pull drawer open and retract (leave_handle)
         # Start from where to_handle ended (xpos_mid)
@@ -155,19 +159,20 @@ class OpenDrawerEnv(EmbodiedEnv):
             control_part="right_arm",
             is_interpolate=True,
             is_linear=True,
-            start_qpos=plan_result_to_handle.positions[-1],
+            start_qpos=plan_to_handle[-1],
             plan_opts=ToppraPlanOptions(
                 sample_method=TrajectorySampleMethod.QUANTITY,
                 sample_interval=50,
             ),
         )
         leave_handle_target_states = [
-            PlanState(move_type=MoveType.EEF_MOVE, xpos=xpos)
+            PlanState.single(move_type=MoveType.EEF_MOVE, xpos=xpos)
             for xpos in [xpos_mid, xpos_begin]
         ]
         plan_result_leave_handle = self.motion_gen.generate(
             target_states=leave_handle_target_states, options=options_leave_handle
         )
+        plan_leave_handle = plan_result_leave_handle.positions[0]
 
         # Phase 3: EEF close motion (grasp the handle) — inserted between
         # to_handle and leave_handle
@@ -176,11 +181,12 @@ class OpenDrawerEnv(EmbodiedEnv):
             num_steps=num_grasp_steps, open=False
         )
 
-        # Compute total trajectory length
-        len_to_start = len(plan_result_to_start.positions)
-        len_to_handle = len(plan_result_to_handle.positions)
+        # Compute total trajectory length (N is the per-env waypoint count,
+        # i.e. dim 1 of the batched (B, N, DOF) positions).
+        len_to_start = plan_to_start.shape[0]
+        len_to_handle = plan_to_handle.shape[0]
         len_grasp = num_grasp_steps
-        len_leave_handle = len(plan_result_leave_handle.positions)
+        len_leave_handle = plan_leave_handle.shape[0]
         total_len = len_to_start + len_to_handle + len_grasp + len_leave_handle
 
         trajectory = torch.zeros(
@@ -195,17 +201,13 @@ class OpenDrawerEnv(EmbodiedEnv):
         idx = 0
 
         # --- Phase 1: Move to start (arm moves, EEF opens) ---
-        trajectory[idx : idx + len_to_start, right_joint_ids] = (
-            plan_result_to_start.positions
-        )
+        trajectory[idx : idx + len_to_start, right_joint_ids] = plan_to_start
         eef_open_motion = self._generate_eef_motion(num_steps=len_to_start, open=True)
         trajectory[idx : idx + len_to_start, right_eef_ids] = eef_open_motion
         idx += len_to_start
 
         # --- Phase 2: Approach handle (arm moves, EEF stays open) ---
-        trajectory[idx : idx + len_to_handle, right_joint_ids] = (
-            plan_result_to_handle.positions
-        )
+        trajectory[idx : idx + len_to_handle, right_joint_ids] = plan_to_handle
         # Keep EEF open while approaching
         trajectory[idx : idx + len_to_handle, right_eef_ids] = self.eef_open.expand(
             len_to_handle, -1
@@ -215,15 +217,13 @@ class OpenDrawerEnv(EmbodiedEnv):
         # --- Phase 3: Grasp the handle (arm holds, EEF closes) ---
         # Hold the arm at the last to_handle position while closing the gripper
         trajectory[idx : idx + len_grasp, right_joint_ids] = (
-            plan_result_to_handle.positions[-1].unsqueeze(0).expand(len_grasp, -1)
+            plan_to_handle[-1].unsqueeze(0).expand(len_grasp, -1)
         )
         trajectory[idx : idx + len_grasp, right_eef_ids] = eef_grasp_motion
         idx += len_grasp
 
         # --- Phase 4: Pull drawer open / retract (arm moves, EEF stays closed) ---
-        trajectory[idx : idx + len_leave_handle, right_joint_ids] = (
-            plan_result_leave_handle.positions
-        )
+        trajectory[idx : idx + len_leave_handle, right_joint_ids] = plan_leave_handle
         # Keep EEF closed while pulling
         trajectory[idx : idx + len_leave_handle, right_eef_ids] = self.eef_close.expand(
             len_leave_handle, -1
