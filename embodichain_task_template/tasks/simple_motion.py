@@ -88,12 +88,14 @@ class SimpleMotionEnv(EmbodiedEnv):
         )
 
         left_target_states = [
-            PlanState(move_type=MoveType.EEF_MOVE, xpos=xpos)
+            PlanState.single(move_type=MoveType.EEF_MOVE, xpos=xpos)
             for xpos in [xpos_begin, xpos_mid, xpos_final]
         ]
         left_plan_result = self.motion_gen.generate(
             target_states=left_target_states, options=options
         )
+        # PlanResult.positions is env-batched (B, N, DOF); drop the batch dim.
+        left_positions = left_plan_result.positions[0]
 
         # Generate joint space trajectory for right arm.
         xpos_begin = self.robot.compute_fk(
@@ -120,16 +122,15 @@ class SimpleMotionEnv(EmbodiedEnv):
         )
 
         right_target_states = [
-            PlanState(move_type=MoveType.JOINT_MOVE, qpos=qpos)
+            PlanState.single(move_type=MoveType.JOINT_MOVE, qpos=qpos)
             for qpos in [qpos_begin[0], qpos_mid[0], qpos_final[0]]
         ]
         right_plan_result = self.motion_gen.generate(
             target_states=right_target_states, options=options
         )
+        right_positions = right_plan_result.positions[0]
 
-        total_len = max(
-            len(left_plan_result.positions), len(right_plan_result.positions)
-        )
+        total_len = max(left_positions.shape[0], right_positions.shape[0])
         trajectory = torch.zeros(
             (total_len, self.robot.dof),
             dtype=torch.float32,
@@ -138,8 +139,8 @@ class SimpleMotionEnv(EmbodiedEnv):
 
         left_joint_ids = self.robot.get_joint_ids("left_arm")
         right_joint_ids = self.robot.get_joint_ids("right_arm")
-        trajectory[:, left_joint_ids] = left_plan_result.positions
-        trajectory[:, right_joint_ids] = right_plan_result.positions
+        trajectory[:, left_joint_ids] = left_positions
+        trajectory[:, right_joint_ids] = right_positions
 
         # Generate eef close to open for last 20 steps
         left_eef_ids = self.robot.get_joint_ids("left_eef")

@@ -37,12 +37,6 @@
         }
     ],
     "light": {
-        "indirect": {
-            "emission_light": {
-                "color": [1.0, 1.0, 1.0],
-                "intensity": 150
-            }
-        },
         "direct": [
             {
                 "uid": "light_1",
