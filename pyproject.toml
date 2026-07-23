@@ -21,10 +21,18 @@ classifiers = [
 ]
 
 dependencies = [
+  "embodichain",
 ]
 
 [project.urls]
 Repository = "https://github.com/DexForce/embodichain_task_template"
+
+# Register this package as an EmbodiChain task package. Importing it triggers
+# auto-registration of all task environments (via @register_env). The unified
+# ``run_env`` CLI discovers this entry point at startup via
+# ``discover_task_packages`` in ``embodichain.lab.gym.utils.registration``.
+[project.entry-points."embodichain.tasks"]
+"embodichain_task_template" = "embodichain_task_template"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]

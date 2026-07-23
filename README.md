@@ -37,6 +37,11 @@ cd {your_task_package_name}
 pip install -e . 
 ```
 
+Installing the package registers its `embodichain.tasks` entry point, so the
+unified `embodichain` CLI (shipped with EmbodiChain) auto-discovers every task
+defined in this package. There is no need to copy or maintain a launch
+script — see [Running a Task](#running-a-task).
+
 ## Quick Start
 
 ### Implement a Task
@@ -67,22 +72,29 @@ If you are implementing a digital twin of a real-world task (e.g., a task in Tab
 
 ### Running a Task
 
-```python
+EmbodiChain ships a unified `embodichain` CLI that discovers all installed
+task packages (including this one) and launches any registered environment.
+The task identity is taken from the `"id"` field of the gym config.
+
+```bash
 # Launch the environment in data generation mode.
-python scripts/run_env.py \
-    --gym_config configs/demo/dummy.json \
-    ...
+embodichain run-env --gym_config configs/demo/dummy.json
 
 # Launch the environment in preview mode.
-python scripts/run_env.py \
-    --gym_config configs/demo/dummy.json \
-    --preview \
-    ...
+embodichain run-env --gym_config configs/demo/dummy.json --preview
+```
+
+The equivalent module invocations (or this repo's thin wrapper) work too:
+
+```bash
+python -m embodichain run-env --gym_config configs/demo/dummy.json
+python -m embodichain.lab.scripts.run_env --gym_config configs/demo/dummy.json
+python scripts/run_env.py --gym_config configs/demo/dummy.json
 ```
 
 The following command-line arguments are commonly used when running the environment:
 
-- `--enable_rt`: Enable ray tracing rendering backend. (recommended used for most of case)
+- `--renderer rt`: Enable ray tracing rendering backend. (recommended for most cases)
 - `--headless`: Run the environment in headless mode. (must be used on servers without display)
 - `--filter_dataset_saving`: Prevent saving dataset for episodes. This argument is used for debugging and testing purposes.
 
