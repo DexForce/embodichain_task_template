@@ -14,34 +14,21 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-"""Script to run the environment."""
+"""Thin launcher that defers to EmbodiChain's unified ``embodichain`` CLI.
 
-import argparse
-import torch
-import numpy as np
+This task package is auto-discovered by the unified CLI through the
+``embodichain.tasks`` entry point declared in ``pyproject.toml``. You can
+therefore launch any registered task with either of::
 
-import gymnasium as gym
-import embodichain_task_template
+    embodichain run-env --gym_config configs/demo/dummy.json
+    python -m embodichain run-env --gym_config configs/demo/dummy.json
 
-from embodichain.lab.gym.utils.gym_utils import (
-    add_env_launcher_args_to_parser,
-    build_env_cfg_from_args,
-)
-from embodichain.lab.scripts.run_env import main as run_env_main
+This script is kept as a convenience entry point that simply calls the unified
+CLI, so existing ``python scripts/run_env.py ...`` invocations keep working
+while benefiting from task discovery and init-hook execution.
+"""
 
+from embodichain.lab.scripts.run_env import cli
 
 if __name__ == "__main__":
-    np.set_printoptions(precision=5, suppress=True)
-    torch.set_printoptions(precision=5, sci_mode=False)
-
-    parser = argparse.ArgumentParser()
-
-    add_env_launcher_args_to_parser(parser)
-
-    args = parser.parse_args()
-
-    env_cfg, gym_config, action_config = build_env_cfg_from_args(args)
-
-    env = gym.make(id=gym_config["id"], cfg=env_cfg, **action_config)
-
-    run_env_main(args, env, gym_config=gym_config)
+    cli()
